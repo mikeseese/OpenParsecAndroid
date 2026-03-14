@@ -247,26 +247,15 @@ Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativeSetConfig(JNIEnv *env, jo
                                                                   jint protocol,
                                                                   jboolean pngCursor)
 {
-    Parsec *p = (Parsec *)(intptr_t)parsec;
-    if (!p) return;
+    (void)parsec;
+    (void)mediaContainer;
+    (void)protocol;
+    (void)pngCursor;
 
-    ParsecClientConfig cfg;
-    memset(&cfg, 0, sizeof(cfg));
-
-    for (int i = 0; i < 2; i++) {
-        cfg.video[i].decoderIndex = 1;
-        cfg.video[i].resolutionX = 0;
-        cfg.video[i].resolutionY = 0;
-        cfg.video[i].decoderH265 = decoderH265;
-        cfg.video[i].decoderCompatibility = decoderCompat;
-    }
-
-    cfg.mediaContainer = mediaContainer;
-    cfg.protocol = protocol;
-    cfg.pngCursor = pngCursor;
-
-    ParsecClientSetConfig(p, &cfg);
-    LOGD("Config updated (h265=%d, compat=%d)",
+    /* ParsecClientSetConfig is not exported by the Parsec SDK.
+       Client config can only be set via ParsecClientConnect.
+       Config changes will take effect on the next connection. */
+    LOGD("Config updated locally (h265=%d, compat=%d) – applies on next connect",
          decoderH265, decoderCompat);
 }
 
