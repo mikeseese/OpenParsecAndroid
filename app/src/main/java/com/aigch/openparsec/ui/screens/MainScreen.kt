@@ -1,7 +1,12 @@
 package com.aigch.openparsec.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.util.Log
+import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -10,6 +15,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -52,6 +58,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -119,6 +127,7 @@ fun MainScreen(
     var showLogoutDialog by remember { mutableStateOf(false) }
     var showSettingsDialog by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    var errorLogs by remember { mutableStateOf<String?>(null) }
 
     val scope = rememberCoroutineScope()
 
@@ -236,6 +245,7 @@ fun MainScreen(
                 if (status == ParsecStatus.OK) {
                     onConnect()
                 } else {
+                    errorLogs = CParsec.getConnectionLogs()
                     errorMessage = "Error connecting to host (code $status)"
                 }
                 break
@@ -278,17 +288,59 @@ fun MainScreen(
         )
     }
 
-    // Error dialog
+    // Error dialog with connection logs
     errorMessage?.let { msg ->
+        val context = LocalContext.current
+        val logs = errorLogs
         AlertDialog(
-            onDismissRequest = { errorMessage = null },
+            onDismissRequest = { errorMessage = null; errorLogs = null },
             title = { Text("Error") },
-            text = { Text(msg) },
+            text = {
+                Column {
+                    Text(msg)
+                    if (!logs.isNullOrBlank()) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            "Connection Logs:",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 200.dp)
+                                .background(Color.Black.copy(alpha = 0.05f), RoundedCornerShape(4.dp))
+                                .padding(4.dp)
+                                .verticalScroll(rememberScrollState())
+                                .horizontalScroll(rememberScrollState())
+                        ) {
+                            Text(
+                                text = logs,
+                                fontSize = 9.sp,
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 12.sp
+                            )
+                        }
+                    }
+                }
+            },
             confirmButton = {
-                TextButton(onClick = { errorMessage = null }) {
+                TextButton(onClick = { errorMessage = null; errorLogs = null }) {
                     Text("OK")
                 }
-            }
+            },
+            dismissButton = if (!logs.isNullOrBlank()) {
+                {
+                    TextButton(onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("Parsec Logs", logs))
+                        Toast.makeText(context, "Logs copied to clipboard", Toast.LENGTH_SHORT).show()
+                    }) {
+                        Text("Copy Logs")
+                    }
+                }
+            } else null
         )
     }
 

@@ -102,4 +102,12 @@ object CParsec {
     }
 
     fun getImpl(): ParsecService? = parsecImpl
+
+    /**
+     * Returns combined native + Kotlin connection logs for debugging.
+     * Useful for diagnosing connection failures (e.g. error code: -1).
+     */
+    fun getConnectionLogs(): String {
+        return (parsecImpl as? ParsecSDKBridge)?.getConnectionLogs() ?: "(No active Parsec instance)"
+    }
 }
