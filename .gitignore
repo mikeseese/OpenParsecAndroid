@@ -26,5 +26,22 @@ Network Trash Folder
 Temporary Items
 .apdisk
 
-## User settings
+## Xcode user settings
 xcuserdata/
+
+# Android
+*.iml
+.gradle/
+/local.properties
+/.idea/
+.idea/
+/build/
+app/build/
+/captures
+.externalNativeBuild/
+.cxx/
+*.apk
+*.aab
+*.ap_
+*.dex
+.gradle/

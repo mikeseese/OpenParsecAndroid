@@ -1,33 +1,97 @@
-# <p align="center">![icon_transparent.png](OpenParsec/Assets.xcassets/IconTransparent.imageset/icon_transparent.png) ![OpenParsec](OpenParsec/Assets.xcassets/LogoShadow.imageset/logo_shadow.png)</p>
+# OpenParsec
 
-OpenParsec is a simple, open-source Parsec client for iOS/iPadOS written in Swift using the SwiftUI framework and the Parsec SDK.
+OpenParsec is a simple, open-source Parsec client written using the Parsec SDK.
 
-This project is still a major WIP, so apologies for the currently lackluster documentation. I'm also very new to both Swift and SwiftUI so I'm sure there are many places for improvement.
+## Platforms
 
-Before building, make sure you have the Parsec SDK framework symlinked or copied to the `Frameworks` folder. Builds were tested on Xcode Version 12.5.
+### Android (Kotlin + Jetpack Compose)
+
+The Android app is located in the root project directory and built with Gradle.
+
+**Requirements:**
+- Android SDK 34+
+- JDK 17
+- Gradle 8.7+
+
+**Building:**
+```bash
+./gradlew assembleDebug
+```
+
+Before building, the Parsec SDK Android native library (.so files) needs to be placed in `app/src/main/jniLibs/` for full SDK functionality. The current implementation provides the full app architecture with stub SDK methods that can be connected to the native Parsec SDK via JNI.
+
+**Project Structure:**
+```
+app/src/main/java/com/aigch/openparsec/
+├── MainActivity.kt              # Entry point
+├── OpenParsecApp.kt             # Application class
+├── ui/
+│   ├── screens/                 # Compose UI screens
+│   │   ├── ContentView.kt      # Navigation controller
+│   │   ├── LoginScreen.kt      # Authentication
+│   │   ├── MainScreen.kt       # Host/friend lists
+│   │   ├── ParsecScreen.kt     # Streaming view
+│   │   └── SettingsScreen.kt   # App settings
+│   └── theme/                   # Material3 theming
+├── parsec/                      # Parsec SDK bridge
+│   ├── CParsec.kt               # Static SDK facade
+│   ├── ParsecSDKBridge.kt       # SDK implementation
+│   ├── ParsecTypes.kt           # Protocol/type definitions
+│   ├── ParsecUserData.kt        # User data structures
+│   ├── CursorPositionHelper.kt  # Coordinate conversion
+│   └── DataManager.kt           # Runtime state
+├── input/                       # Input handling
+│   ├── KeyCodeTranslators.kt    # Keycode mapping
+│   ├── GameControllerHandler.kt # Gamepad support
+│   └── TouchHandler.kt          # Touch input
+├── audio/
+│   └── AudioPlayer.kt           # AudioTrack playback
+├── network/
+│   ├── NetworkHandler.kt        # API data models
+│   ├── ApiClient.kt             # HTTP client
+│   └── SessionStore.kt          # Session persistence
+└── settings/
+    └── SettingsHandler.kt        # SharedPreferences settings
+```
+
+### iOS (Swift + SwiftUI) — Reference
+
+The original iOS app source has been preserved in the `ios/` directory for reference.
+
+Before building the iOS app, make sure you have the Parsec SDK framework symlinked or copied to `ios/Frameworks`. Builds were tested on Xcode Version 12.5.
+
+## Features
+
+- **Login** — Parsec API authentication with 2FA support
+- **Host Discovery** — Browse available remote computers
+- **Friends** — View friends list
+- **Streaming** — Remote desktop/game streaming via Parsec SDK
+- **Input** — Touch controls (touchpad/direct), keyboard, mouse, and gamepad support
+- **Settings** — Resolution, bitrate, decoder, cursor sensitivity, FPS preferences
+- **Overlay** — In-stream controls for resolution/bitrate/display switching
+
+## Touch Controls
+
+You can set the touch mode in settings. Touchpad mode and direct touch mode are supported.
+
+When streaming, you can tap with 3 fingers to bring up the on-screen keyboard.
+
+You can toggle scrolling vs zoom behavior in the overlay menu.
+
+## Mouse & Keyboard
+
+USB mouse & keyboard are supported.
+
+## Game Controllers
+
+When streaming, press any trigger button on your controller and Parsec will recognize it. Make sure to configure the host properly (install virtual USB driver etc.) before using game controllers.
 
 ## Downloads
+
+### iOS
 <a href="https://celloserenity.github.io/altdirect/?url=https://github.com/hugeBlack/OpenParsec/releases/download/nightly/altstore.json" target="_blank">
    <img src="https://github.com/CelloSerenity/altdirect/blob/main/assets/png/AltSource_Blue.png?raw=true" alt="Add AltSource" width="200">
 </a>
 <a href="https://github.com/hugeBlack/OpenParsec/releases/download/nightly/OpenParsec.ipa" target="_blank">
    <img src="https://github.com/CelloSerenity/altdirect/blob/main/assets/png/Download_Blue.png?raw=true" alt="Download .ipa" width="200">
 </a>
-
-## Touch Control
-You can set the touch mode you want to use in settings. Touchpad mode and direct touch mode are supported.
-
-When streaming, you can tap with 3 fingers to bring up the on-screen keyboard.
-
-You can toggle if you want to use 2 fingers to scroll or zoom in the overlay menu.
-
-## Mouse & keyboard
-USB mouse & keyboard are supported. 
-
-## Game Controllers
-When streaming, press any trigger button in your controller and parsec will recognize it. Make sure to configure the host properly (install virtual USB driver etc.) before using game controllers.
-
-## Lag / Low Bitrate Issue
-If you encounter lags from nowhere or your bitrate hardly goes over 10 Mbps, download Steam Link and do a network test. If you see constant lag spike in the graph, then it's a problem with Apple and there's little we can do to solve this problem. See [here](https://github.com/moonlight-stream/moonlight-ios/issues/627) for more disscussion. 
-
-If you can't change your wireless router's channel to 149 like me, my personal experience is that you can try to power off the device you are using to stream as well as any nearby Apple devices, especially Mac, then only power on the device you are using to stream and do the aforementioned network test again. You can turn on other devices if the lag spike is gone and it may sustain for couple hours or days.

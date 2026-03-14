@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="accent">#FFBB01F0</color>
+    <color name="foreground">#FFFFFFFF</color>
+    <color name="foreground_inactive">#80FFFFFF</color>
+    <color name="background_gray">#FF1C1C1E</color>
+    <color name="background_tab">#FF2C2C2E</color>
+    <color name="background_card">#FF3A3A3C</color>
+    <color name="background_button">#FF48484A</color>
+    <color name="background_field">#FF3A3A3C</color>
+    <color name="background_prompt">#FF2C2C2E</color>
+    <color name="shading">#40000000</color>
+</resources>
