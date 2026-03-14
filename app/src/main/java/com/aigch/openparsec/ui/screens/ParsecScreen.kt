@@ -23,6 +23,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -35,6 +36,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
+import com.aigch.openparsec.ui.ParsecGLSurfaceView
 import com.aigch.openparsec.parsec.CParsec
 import com.aigch.openparsec.parsec.DataManager
 import com.aigch.openparsec.parsec.ParsecStatus
@@ -106,23 +109,29 @@ fun ParsecScreen(
         )
     }
 
+    // GLSurfaceView for Parsec rendering
+    var glSurfaceView by remember { mutableStateOf<ParsecGLSurfaceView?>(null) }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            glSurfaceView?.onPause()
+        }
+    }
+
     Box(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
     ) {
-        // Streaming surface placeholder
-        // TODO: Replace with actual OpenGL ES SurfaceView for Parsec rendering
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                "Streaming View\n(Parsec SDK rendering surface)",
-                color = Foreground.copy(alpha = 0.3f),
-                textAlign = TextAlign.Center
-            )
-        }
+        // Streaming rendering surface (ported from iOS ParsecGLKViewController)
+        AndroidView(
+            factory = { context ->
+                ParsecGLSurfaceView(context).also {
+                    glSurfaceView = it
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        )
 
         // Metrics bar
         if (showMenu) {
