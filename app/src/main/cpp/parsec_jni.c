@@ -34,6 +34,8 @@
 /* --- In-memory log buffer for diagnostics --- */
 
 #define LOG_BUFFER_SIZE (64 * 1024) /* 64 KB circular buffer */
+#define MAX_LOG_LINE_SIZE 1024     /* max formatted line length */
+#define MAX_LOG_MSG_SIZE  512      /* max message size for LOG_BUF_* macros */
 
 static char log_buffer[LOG_BUFFER_SIZE];
 static int  log_buffer_pos = 0;      /* next write position */
@@ -51,7 +53,7 @@ static void log_buffer_append(const char *level, const char *tag, const char *ms
     struct tm tm_info;
     localtime_r(&ts.tv_sec, &tm_info);
 
-    char line[1024];
+    char line[MAX_LOG_LINE_SIZE];
     int len = snprintf(line, sizeof(line),
         "%02d:%02d:%02d.%03ld [%s/%s] %s\n",
         tm_info.tm_hour, tm_info.tm_min, tm_info.tm_sec,
@@ -76,19 +78,19 @@ static void log_buffer_append(const char *level, const char *tag, const char *ms
  * Helper macros that log to both logcat and the in-memory buffer.
  */
 #define LOG_BUF_D(tag, fmt, ...) do { \
-    char _msg[512]; snprintf(_msg, sizeof(_msg), fmt, ##__VA_ARGS__); \
+    char _msg[MAX_LOG_MSG_SIZE]; snprintf(_msg, sizeof(_msg), fmt, ##__VA_ARGS__); \
     __android_log_print(ANDROID_LOG_DEBUG, tag, "%s", _msg); \
     log_buffer_append("D", tag, _msg); \
 } while(0)
 
 #define LOG_BUF_I(tag, fmt, ...) do { \
-    char _msg[512]; snprintf(_msg, sizeof(_msg), fmt, ##__VA_ARGS__); \
+    char _msg[MAX_LOG_MSG_SIZE]; snprintf(_msg, sizeof(_msg), fmt, ##__VA_ARGS__); \
     __android_log_print(ANDROID_LOG_INFO, tag, "%s", _msg); \
     log_buffer_append("I", tag, _msg); \
 } while(0)
 
 #define LOG_BUF_E(tag, fmt, ...) do { \
-    char _msg[512]; snprintf(_msg, sizeof(_msg), fmt, ##__VA_ARGS__); \
+    char _msg[MAX_LOG_MSG_SIZE]; snprintf(_msg, sizeof(_msg), fmt, ##__VA_ARGS__); \
     __android_log_print(ANDROID_LOG_ERROR, tag, "%s", _msg); \
     log_buffer_append("E", tag, _msg); \
 } while(0)
