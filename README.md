@@ -18,7 +18,23 @@ The Android app is located in the root project directory and built with Gradle.
 ./gradlew assembleDebug
 ```
 
-Before building, the Parsec SDK Android native library (.so files) needs to be placed in `app/src/main/jniLibs/` for full SDK functionality. The current implementation provides the full app architecture with stub SDK methods that can be connected to the native Parsec SDK via JNI.
+**Parsec SDK Setup:**
+
+The Parsec SDK native libraries are required for streaming functionality. The official SDK page (parsec.app/docs/sdk) is no longer available, but the libraries are preserved in the [MalfoyJW/parsec-sdk](https://github.com/MalfoyJW/parsec-sdk) repository (same source used by the iOS build via git submodule).
+
+Copy the `.so` files from that repo's `sdk/android/` directory into your `jniLibs`:
+
+```bash
+# Clone the SDK repo
+git clone https://github.com/MalfoyJW/parsec-sdk.git /tmp/parsec-sdk
+
+# Copy .so files for each ABI
+cp /tmp/parsec-sdk/sdk/android/arm64-v8a/libparsec.so app/src/main/jniLibs/arm64-v8a/
+cp /tmp/parsec-sdk/sdk/android/armeabi-v7a/libparsec.so app/src/main/jniLibs/armeabi-v7a/
+cp /tmp/parsec-sdk/sdk/android/x86_64/libparsec.so app/src/main/jniLibs/x86_64/
+```
+
+The project builds with or without the SDK libraries present — when absent, CMake emits a warning but the build succeeds (SDK calls will be no-ops).
 
 **Project Structure:**
 ```
