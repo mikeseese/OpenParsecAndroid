@@ -219,7 +219,6 @@ bool ParsecClientPollEvents(Parsec *parsec, uint32_t timeout,
                              ParsecClientEvent *event);
 
 void ParsecClientSendMessage(Parsec *parsec, ParsecMessage *msg);
-void ParsecClientSetConfig(Parsec *parsec, ParsecClientConfig *cfg);
 void ParsecClientSendUserData(Parsec *parsec, uint32_t type, const char *data);
 
 void *ParsecGetBuffer(Parsec *parsec, uint32_t key);

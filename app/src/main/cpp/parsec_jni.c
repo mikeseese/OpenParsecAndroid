@@ -265,8 +265,11 @@ Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativeSetConfig(JNIEnv *env, jo
     cfg.protocol = protocol;
     cfg.pngCursor = pngCursor;
 
-    ParsecClientSetConfig(p, &cfg);
-    LOGD("Config applied (h265=%d, compat=%d)", decoderH265, decoderCompat);
+    /* ParsecClientSetConfig does not exist in the Parsec SDK.
+       Client config is applied during ParsecClientConnect.
+       Config changes will take effect on the next connection. */
+    LOGD("Config updated (h265=%d, compat=%d) - will apply on next connect",
+         decoderH265, decoderCompat);
 }
 
 /* --- Input Messages --- */
