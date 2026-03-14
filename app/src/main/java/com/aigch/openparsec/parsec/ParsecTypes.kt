@@ -25,7 +25,7 @@ data class MouseInfo(
  */
 object ParsecStatus {
     const val OK = 0
-    const val CONNECTING = -6001
+    const val CONNECTING = 20
     const val ERR = -1
 }
 
