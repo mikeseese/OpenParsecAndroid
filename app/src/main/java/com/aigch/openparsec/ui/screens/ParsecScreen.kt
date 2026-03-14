@@ -1,7 +1,12 @@
 package com.aigch.openparsec.ui.screens
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,11 +14,15 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Keyboard
 import androidx.compose.material3.AlertDialog
@@ -32,6 +41,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -66,6 +77,7 @@ fun ParsecScreen(
     var constantFps by remember { mutableStateOf(false) }
     var showDCAlert by remember { mutableStateOf(false) }
     var dcAlertText by remember { mutableStateOf("Disconnected (reason unknown)") }
+    var dcLogs by remember { mutableStateOf<String?>(null) }
     var metricInfo by remember { mutableStateOf("Loading...") }
 
     fun disconnect() {
@@ -90,22 +102,64 @@ fun ParsecScreen(
             if (showDCAlert) continue
             val status = CParsec.getStatus()
             if (status != ParsecStatus.OK) {
+                dcLogs = CParsec.getConnectionLogs()
                 dcAlertText = "Disconnected (code $status)"
                 showDCAlert = true
             }
         }
     }
 
-    // Disconnect alert
+    // Disconnect alert with connection logs
     if (showDCAlert) {
+        val context = LocalContext.current
+        val logs = dcLogs
         AlertDialog(
             onDismissRequest = { disconnect() },
             title = { Text(dcAlertText) },
+            text = if (!logs.isNullOrBlank()) {
+                {
+                    Column {
+                        Text(
+                            "Connection Logs:",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(max = 200.dp)
+                                .background(Color.Black.copy(alpha = 0.05f), RoundedCornerShape(4.dp))
+                                .padding(4.dp)
+                                .verticalScroll(rememberScrollState())
+                                .horizontalScroll(rememberScrollState())
+                        ) {
+                            Text(
+                                text = logs,
+                                fontSize = 9.sp,
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 12.sp
+                            )
+                        }
+                    }
+                }
+            } else null,
             confirmButton = {
                 TextButton(onClick = { disconnect() }) {
                     Text("Close")
                 }
-            }
+            },
+            dismissButton = if (!logs.isNullOrBlank()) {
+                {
+                    TextButton(onClick = {
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("Parsec Logs", logs))
+                        Toast.makeText(context, "Logs copied to clipboard", Toast.LENGTH_SHORT).show()
+                    }) {
+                        Text("Copy Logs")
+                    }
+                }
+            } else null
         )
     }
 

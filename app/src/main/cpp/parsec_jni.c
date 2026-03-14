@@ -19,6 +19,10 @@
 #include "parsec-sdk/parsec.h"
 #include "audio_android.h"
 
+#include <pthread.h>
+#include <time.h>
+#include <stdio.h>
+
 #define TAG "ParsecJNI"
 #define LOGD(...) __android_log_print(ANDROID_LOG_DEBUG, TAG, __VA_ARGS__)
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
@@ -26,6 +30,70 @@
 
 /* JNI class path */
 #define JNI_CLASS "com/aigch/openparsec/parsec/ParsecSDKBridge"
+
+/* --- In-memory log buffer for diagnostics --- */
+
+#define LOG_BUFFER_SIZE (64 * 1024) /* 64 KB circular buffer */
+#define MAX_LOG_LINE_SIZE 1024     /* max formatted line length */
+#define MAX_LOG_MSG_SIZE  512      /* max message size for LOG_BUF_* macros */
+
+static char log_buffer[LOG_BUFFER_SIZE];
+static int  log_buffer_pos = 0;      /* next write position */
+static int  log_buffer_wrapped = 0;  /* whether the buffer has wrapped */
+static pthread_mutex_t log_mutex = PTHREAD_MUTEX_INITIALIZER;
+
+/**
+ * Append a timestamped message to the in-memory log buffer.
+ * Thread-safe via mutex.
+ */
+static void log_buffer_append(const char *level, const char *tag, const char *msg)
+{
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    struct tm tm_info;
+    localtime_r(&ts.tv_sec, &tm_info);
+
+    char line[MAX_LOG_LINE_SIZE];
+    int len = snprintf(line, sizeof(line),
+        "%02d:%02d:%02d.%03ld [%s/%s] %s\n",
+        tm_info.tm_hour, tm_info.tm_min, tm_info.tm_sec,
+        ts.tv_nsec / 1000000L,
+        level, tag, msg);
+    if (len <= 0) return;
+    if (len >= (int)sizeof(line)) len = (int)sizeof(line) - 1;
+
+    pthread_mutex_lock(&log_mutex);
+    for (int i = 0; i < len; i++) {
+        log_buffer[log_buffer_pos] = line[i];
+        log_buffer_pos++;
+        if (log_buffer_pos >= LOG_BUFFER_SIZE) {
+            log_buffer_pos = 0;
+            log_buffer_wrapped = 1;
+        }
+    }
+    pthread_mutex_unlock(&log_mutex);
+}
+
+/**
+ * Helper macros that log to both logcat and the in-memory buffer.
+ */
+#define LOG_BUF_D(tag, fmt, ...) do { \
+    char _msg[MAX_LOG_MSG_SIZE]; snprintf(_msg, sizeof(_msg), fmt, ##__VA_ARGS__); \
+    __android_log_print(ANDROID_LOG_DEBUG, tag, "%s", _msg); \
+    log_buffer_append("D", tag, _msg); \
+} while(0)
+
+#define LOG_BUF_I(tag, fmt, ...) do { \
+    char _msg[MAX_LOG_MSG_SIZE]; snprintf(_msg, sizeof(_msg), fmt, ##__VA_ARGS__); \
+    __android_log_print(ANDROID_LOG_INFO, tag, "%s", _msg); \
+    log_buffer_append("I", tag, _msg); \
+} while(0)
+
+#define LOG_BUF_E(tag, fmt, ...) do { \
+    char _msg[MAX_LOG_MSG_SIZE]; snprintf(_msg, sizeof(_msg), fmt, ##__VA_ARGS__); \
+    __android_log_print(ANDROID_LOG_ERROR, tag, "%s", _msg); \
+    log_buffer_append("E", tag, _msg); \
+} while(0)
 
 /* Cached method IDs for callbacks from native to Kotlin */
 static jmethodID handleCursorEventMethodId = NULL;
@@ -36,14 +104,14 @@ static jfieldID hostWidthFieldId = NULL;
 static jfieldID hostHeightFieldId = NULL;
 
 /**
- * Parsec SDK log callback - forwards to Android logcat.
+ * Parsec SDK log callback - forwards to Android logcat and in-memory buffer.
  */
 static void parsec_log_callback(ParsecLogLevel level, const char *msg, void *opaque)
 {
     if (level == LOG_DEBUG) {
-        LOGD("[Parsec] %s", msg);
+        LOG_BUF_D("Parsec", "%s", msg);
     } else {
-        LOGI("[Parsec] %s", msg);
+        LOG_BUF_I("Parsec", "%s", msg);
     }
 }
 
@@ -61,7 +129,7 @@ Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativeInit(JNIEnv *env, jobject
         NULL, NULL, &parsec);
 
     if (status != PARSEC_OK || !parsec) {
-        LOGE("ParsecInit failed with status %d", status);
+        LOG_BUF_E(TAG, "ParsecInit failed with status %d", status);
         return 0;
     }
 
@@ -79,12 +147,12 @@ Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativeInit(JNIEnv *env, jobject
     (*env)->DeleteLocalRef(env, cls);
 
     if (!handleCursorEventMethodId || !handleUserDataEventMethodId) {
-        LOGE("Failed to find callback method IDs");
+        LOG_BUF_E(TAG, "Failed to find callback method IDs");
         ParsecDestroy(parsec);
         return 0;
     }
 
-    LOGD("ParsecInit succeeded, handle=%p", parsec);
+    LOG_BUF_D(TAG, "ParsecInit succeeded, handle=%p", parsec);
     return (jlong)(intptr_t)parsec;
 }
 
@@ -130,7 +198,10 @@ Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativeConnect(JNIEnv *env, jobj
                                                                 jboolean decoderCompat)
 {
     Parsec *p = (Parsec *)(intptr_t)parsec;
-    if (!p) return PARSEC_ERR;
+    if (!p) {
+        LOG_BUF_E(TAG, "nativeConnect: null Parsec handle");
+        return PARSEC_ERR;
+    }
 
     const char *sid = (*env)->GetStringUTFChars(env, sessionId, NULL);
     const char *pid = (*env)->GetStringUTFChars(env, peerId, NULL);
@@ -151,10 +222,12 @@ Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativeConnect(JNIEnv *env, jobj
     cfg.protocol = 1;
     cfg.pngCursor = false;
 
-    LOGD("Connecting to peer %s (res=%dx%d, h265=%d, compat=%d)",
+    LOG_BUF_D(TAG, "Connecting to peer %s (res=%dx%d, h265=%d, compat=%d)",
          pid, resX, resY, decoderH265, decoderCompat);
 
     ParsecStatus status = ParsecClientConnect(p, &cfg, sid, pid);
+
+    LOG_BUF_D(TAG, "ParsecClientConnect returned status=%d", (int)status);
 
     (*env)->ReleaseStringUTFChars(env, sessionId, sid);
     (*env)->ReleaseStringUTFChars(env, peerId, pid);
@@ -174,7 +247,7 @@ Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativeDisconnect(JNIEnv *env, j
     Parsec *p = (Parsec *)(intptr_t)parsec;
     if (p) {
         ParsecClientDisconnect(p);
-        LOGD("Disconnected");
+        LOG_BUF_D(TAG, "Disconnected");
     }
 }
 
@@ -501,4 +574,45 @@ Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativePollEvents(JNIEnv *env, j
             ParsecFree(buf);
         }
     }
+}
+
+/* --- Log Retrieval --- */
+
+JNIEXPORT jstring JNICALL
+Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativeGetLogs(JNIEnv *env, jobject thiz)
+{
+    char *result = NULL;
+
+    pthread_mutex_lock(&log_mutex);
+
+    if (!log_buffer_wrapped && log_buffer_pos == 0) {
+        /* Buffer is empty */
+        pthread_mutex_unlock(&log_mutex);
+        return (*env)->NewStringUTF(env, "");
+    }
+
+    if (!log_buffer_wrapped) {
+        /* Buffer hasn't wrapped - simple copy from start to pos */
+        result = malloc(log_buffer_pos + 1);
+        if (result) {
+            memcpy(result, log_buffer, log_buffer_pos);
+            result[log_buffer_pos] = '\0';
+        }
+    } else {
+        /* Buffer has wrapped - read from pos..end then 0..pos */
+        int first_len = LOG_BUFFER_SIZE - log_buffer_pos;
+        int second_len = log_buffer_pos;
+        result = malloc(LOG_BUFFER_SIZE + 1);
+        if (result) {
+            memcpy(result, log_buffer + log_buffer_pos, first_len);
+            memcpy(result + first_len, log_buffer, second_len);
+            result[LOG_BUFFER_SIZE] = '\0';
+        }
+    }
+
+    pthread_mutex_unlock(&log_mutex);
+
+    jstring jresult = (*env)->NewStringUTF(env, result ? result : "");
+    free(result);
+    return jresult;
 }

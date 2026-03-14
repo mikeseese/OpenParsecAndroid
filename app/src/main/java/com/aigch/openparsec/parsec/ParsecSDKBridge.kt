@@ -8,6 +8,9 @@ import com.aigch.openparsec.settings.SettingsHandler
 import org.json.JSONArray
 import org.json.JSONObject
 import java.nio.ByteBuffer
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Parsec SDK bridge implementation for Android.
@@ -23,6 +26,25 @@ import java.nio.ByteBuffer
 class ParsecSDKBridge : ParsecService {
     companion object {
         private const val TAG = "ParsecSDKBridge"
+        private const val MAX_KOTLIN_LOG_LINES = 200
+
+        /** Kotlin-side log entries for connection lifecycle events. */
+        private val kotlinLogLines = mutableListOf<String>()
+
+        private val timeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
+
+        @Synchronized
+        fun appendKotlinLog(level: String, tag: String, message: String) {
+            val ts = timeFormat.format(Date())
+            val line = "$ts [$level/$tag] $message"
+            kotlinLogLines.add(line)
+            if (kotlinLogLines.size > MAX_KOTLIN_LOG_LINES) {
+                kotlinLogLines.removeAt(0)
+            }
+        }
+
+        @Synchronized
+        fun getKotlinLogs(): String = kotlinLogLines.joinToString("\n")
 
         init {
             try {
@@ -89,6 +111,7 @@ class ParsecSDKBridge : ParsecService {
     private external fun nativePollEvents(parsec: Long, timeout: Int)
     private external fun nativeAudioMute(audio: Long, muted: Boolean)
     private external fun nativeAudioClear(audio: Long)
+    private external fun nativeGetLogs(): String
 
     init {
         Log.d(TAG, "ParsecSDKBridge initializing")
@@ -116,10 +139,21 @@ class ParsecSDKBridge : ParsecService {
 
     override fun connect(peerID: String): Int {
         Log.d(TAG, "Connecting to peer: $peerID")
-        if (nativeParsec == 0L) return ParsecStatus.ERR
+        appendKotlinLog("D", TAG, "Connecting to peer: $peerID")
+        if (nativeParsec == 0L) {
+            appendKotlinLog("E", TAG, "connect() failed: null native handle")
+            return ParsecStatus.ERR
+        }
 
         val resolution = SettingsHandler.resolution
-        val sessionId = NetworkHandler.clinfo?.session_id ?: return ParsecStatus.ERR
+        val sessionId = NetworkHandler.clinfo?.session_id
+        if (sessionId == null) {
+            appendKotlinLog("E", TAG, "connect() failed: no session_id available")
+            return ParsecStatus.ERR
+        }
+
+        appendKotlinLog("D", TAG, "Config: res=${resolution.width}x${resolution.height}, " +
+                "decoder=${SettingsHandler.decoder}, compat=${SettingsHandler.decoderCompatibility}")
 
         val status = nativeConnect(
             nativeParsec, sessionId, peerID,
@@ -128,9 +162,13 @@ class ParsecSDKBridge : ParsecService {
             SettingsHandler.decoderCompatibility
         )
 
+        appendKotlinLog("D", TAG, "nativeConnect returned status=$status (${statusToString(status)})")
+
         if (status == ParsecStatus.CONNECTING || status == ParsecStatus.OK) {
             backgroundTaskRunning = true
             startBackgroundTask()
+        } else {
+            appendKotlinLog("E", TAG, "Connection failed immediately with status=$status")
         }
 
         return status
@@ -138,6 +176,7 @@ class ParsecSDKBridge : ParsecService {
 
     override fun disconnect() {
         Log.d(TAG, "Disconnecting")
+        appendKotlinLog("D", TAG, "disconnect() called")
         backgroundTaskRunning = false
         if (nativeParsec != 0L) {
             nativeDisconnect(nativeParsec, nativeAudio)
@@ -273,6 +312,37 @@ class ParsecSDKBridge : ParsecService {
             CParsec.sendUserData(ParsecUserDataType.SET_VIDEO_CONFIG, json.toByteArray())
         } catch (e: Exception) {
             Log.e(TAG, "Error encoding video config: ${e.message}")
+        }
+    }
+
+    /* --- Connection Logs --- */
+
+    /**
+     * Returns combined native + Kotlin logs for debugging connection issues.
+     */
+    fun getConnectionLogs(): String {
+        val sb = StringBuilder()
+        sb.appendLine("=== Native Parsec SDK Logs ===")
+        try {
+            sb.appendLine(nativeGetLogs())
+        } catch (e: Exception) {
+            sb.appendLine("(Failed to retrieve native logs: ${e.message})")
+        }
+        sb.appendLine()
+        sb.appendLine("=== Kotlin Bridge Logs ===")
+        sb.appendLine(getKotlinLogs())
+        return sb.toString()
+    }
+
+    private fun statusToString(status: Int): String {
+        return when (status) {
+            ParsecStatus.OK -> "OK"
+            ParsecStatus.CONNECTING -> "CONNECTING"
+            ParsecStatus.ERR -> "ERR_DEFAULT"
+            -3 -> "NOT_RUNNING"
+            -4 -> "ALREADY_RUNNING"
+            -36000 -> "ERR_VERSION"
+            else -> "UNKNOWN($status)"
         }
     }
 
