@@ -323,8 +323,6 @@ ParsecStatus ParsecClientConnect(Parsec *ps, const ParsecClientConfig *cfg,
 void ParsecClientDisconnect(Parsec *ps);
 ParsecStatus ParsecClientGetStatus(Parsec *ps, ParsecClientStatus *status);
 
-void ParsecClientSetConfig(Parsec *ps, const ParsecClientConfig *cfg);
-
 void ParsecClientSetDimensions(Parsec *ps, uint8_t stream,
                                 uint32_t width, uint32_t height, float scale);
 
