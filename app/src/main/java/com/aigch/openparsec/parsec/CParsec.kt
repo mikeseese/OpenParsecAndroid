@@ -21,6 +21,7 @@ object CParsec {
     }
 
     fun destroy() {
+        (parsecImpl as? ParsecSDKBridge)?.destroy()
         parsecImpl = null
     }
 
@@ -34,6 +35,10 @@ object CParsec {
 
     fun getStatus(): Int {
         return parsecImpl?.getStatus() ?: ParsecStatus.ERR
+    }
+
+    fun getStatusEx(): Int {
+        return (parsecImpl as? ParsecSDKBridge)?.getStatusEx() ?: ParsecStatus.ERR
     }
 
     fun setFrame(width: Float, height: Float, scale: Float) {

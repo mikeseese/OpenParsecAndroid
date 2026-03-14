@@ -25,6 +25,25 @@ jobs:
           java-version: "17"
           distribution: "temurin"
 
+      - name: Fetch Parsec SDK
+        run: |
+          git clone --depth 1 https://github.com/MalfoyJW/parsec-sdk.git /tmp/parsec-sdk
+          cd /tmp/parsec-sdk
+          if [ "$(git rev-parse HEAD)" != "bcf0489ddde91e7a7c90d0a02509afa262c20f3d" ]; then
+            echo "::error::Parsec SDK repo HEAD has changed from expected commit bcf0489. Please verify and update the pinned SHA."
+            exit 1
+          fi
+          cd -
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            src="/tmp/parsec-sdk/sdk/android/${abi}/libparsec.so"
+            if [ ! -f "$src" ]; then
+              echo "::error::Missing expected SDK library: $src"
+              exit 1
+            fi
+            mkdir -p "app/src/main/jniLibs/${abi}"
+            cp "$src" "app/src/main/jniLibs/${abi}/"
+          done
+
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
