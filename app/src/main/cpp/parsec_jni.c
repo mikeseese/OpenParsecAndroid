@@ -38,7 +38,7 @@ static jfieldID hostHeightFieldId = NULL;
 /**
  * Parsec SDK log callback - forwards to Android logcat.
  */
-static void parsec_log_callback(int32_t level, const char *msg, void *opaque)
+static void parsec_log_callback(ParsecLogLevel level, const char *msg, void *opaque)
 {
     if (level == LOG_DEBUG) {
         LOGD("[Parsec] %s", msg);
@@ -57,7 +57,7 @@ Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativeInit(JNIEnv *env, jobject
     ParsecSetLogCallback(parsec_log_callback, NULL);
 
     ParsecStatus status = ParsecInit(
-        (PARSEC_VER_MAJOR << 16) | PARSEC_VER_MINOR,
+        PARSEC_VER,
         NULL, NULL, &parsec);
 
     if (status != PARSEC_OK || !parsec) {
@@ -265,10 +265,8 @@ Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativeSetConfig(JNIEnv *env, jo
     cfg.protocol = protocol;
     cfg.pngCursor = pngCursor;
 
-    /* ParsecClientSetConfig does not exist in the Parsec SDK.
-       Client config is applied during ParsecClientConnect.
-       Config changes will take effect on the next connection. */
-    LOGD("Config updated (h265=%d, compat=%d) - will apply on next connect",
+    ParsecClientSetConfig(p, &cfg);
+    LOGD("Config updated (h265=%d, compat=%d)",
          decoderH265, decoderCompat);
 }
 
