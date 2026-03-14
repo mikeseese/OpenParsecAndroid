@@ -1,10 +1,10 @@
 /**
- * Parsec SDK C API compatibility header (V6).
+ * Parsec SDK C API compatibility header (V1).
  *
  * This header declares the Parsec SDK types and functions used by the JNI bridge.
  * It provides the minimal API surface needed for OpenParsec Android integration.
- * Struct layouts and function signatures match the official Parsec SDK V6 ABI
- * (as used by the iOS framework at ios/Frameworks/ParsecSDK.framework/Headers/parsec.h).
+ * Struct layouts and function signatures match the official Parsec SDK V1 ABI
+ * (as shipped in the MalfoyJW/parsec-sdk Android binaries).
  *
  * The Parsec SDK shared library (libparsec.so) must be placed in
  * app/src/main/jniLibs/{abi}/ for each target architecture.
@@ -24,20 +24,14 @@ extern "C" {
 
 /*** DEFINITIONS ***/
 
-#define GUEST_NAME_LEN   32
-#define EXTERNAL_ID_LEN  64
-#define HOST_SECRET_LEN  32
-#define NUM_VSTREAMS     2
-#define DECODER_NAME_LEN 16
+#define GUEST_NAME_LEN   320
+#define ATTEMPT_ID_LEN   56
 
-#define PARSEC_VER_MAJOR 6
+#define PARSEC_VER_MAJOR 1
 #define PARSEC_VER_MINOR 0
 
 #define PARSEC_VER \
     ((uint32_t) (((uint16_t) PARSEC_VER_MAJOR << 16u) | ((uint16_t) PARSEC_VER_MINOR)))
-
-/* Default stream index */
-#define DEFAULT_STREAM 0
 
 /* Convenience key modifier */
 #define MOD_NONE 0
@@ -47,10 +41,12 @@ extern "C" {
 
 typedef enum ParsecStatus {
     PARSEC_OK                 = 0,
-    PARSEC_CONNECTING         = 20,
+    WRN_CONTINUE              = 10,
     ERR_DEFAULT               = -1,
     PARSEC_NOT_RUNNING        = -3,
     PARSEC_ALREADY_RUNNING    = -4,
+    SO_ERR_OPEN               = -35000,
+    SO_ERR_SYMBOL             = -35001,
     PARSEC_ERR_VERSION        = -36000,
     __PARSEC_STATUS_MAKE_32   = 0x7FFFFFFF,
 } ParsecStatus;
@@ -81,7 +77,6 @@ typedef enum ParsecClientEventType {
     CLIENT_EVENT_USER_DATA = 3,
     CLIENT_EVENT_BLOCKED   = 4,
     CLIENT_EVENT_UNBLOCKED = 5,
-    CLIENT_EVENT_STREAM    = 6,
     __CLIENT_EVENT_MAKE_32 = 0x7FFFFFFF,
 } ParsecClientEventType;
 
@@ -130,10 +125,10 @@ typedef struct ParsecCursor {
     uint16_t height;
     uint16_t hotX;
     uint16_t hotY;
-    bool hidden;
+    bool modeUpdate;
     bool imageUpdate;
     bool relative;
-    uint8_t stream;
+    uint8_t __pad[1];
 } ParsecCursor;
 
 /* --- Permissions & Metrics (needed for ParsecGuest / ParsecClientStatus) --- */
@@ -146,24 +141,19 @@ typedef struct ParsecPermissions {
 } ParsecPermissions;
 
 typedef struct ParsecMetrics {
-    uint32_t packetsSent;
-    uint32_t fastRTs;
-    uint32_t slowRTs;
-    uint32_t queuedFrames;
     float encodeLatency;
     float decodeLatency;
     float networkLatency;
-    float bitrate;
 } ParsecMetrics;
 
 typedef struct ParsecGuest {
     ParsecPermissions perms;
-    ParsecMetrics metrics[NUM_VSTREAMS];
+    ParsecMetrics metrics;
     ParsecGuestState state;
     uint32_t id;
     uint32_t userID;
     char name[GUEST_NAME_LEN];
-    char externalID[EXTERNAL_ID_LEN];
+    char attemptID[ATTEMPT_ID_LEN];
     bool owner;
     uint8_t __pad[3];
 } ParsecGuest;
@@ -192,9 +182,7 @@ typedef struct ParsecMouseMotionMessage {
     int32_t x;
     int32_t y;
     bool relative;
-    bool scaleRelative;
-    uint8_t stream;
-    uint8_t __pad[1];
+    uint8_t __pad[3];
 } ParsecMouseMotionMessage;
 
 typedef struct ParsecGamepadButtonMessage {
@@ -230,43 +218,25 @@ typedef struct ParsecMessage {
 
 /* --- Client config --- */
 
-typedef struct ParsecClientVideoConfig {
-    uint32_t decoderIndex;
-    int32_t resolutionX;
-    int32_t resolutionY;
-    bool decoderCompatibility;
-    bool decoderH265;
-    bool decoder444;
-    uint8_t __pad[1];
-} ParsecClientVideoConfig;
-
 typedef struct ParsecClientConfig {
-    ParsecClientVideoConfig video[NUM_VSTREAMS];
+    int32_t decoderSoftware;
     int32_t mediaContainer;
     int32_t protocol;
-    char secret[HOST_SECRET_LEN];
+    int32_t resolutionX;
+    int32_t resolutionY;
+    int32_t refreshRate;
     bool pngCursor;
     uint8_t __pad[3];
 } ParsecClientConfig;
 
-/* --- Decoder / Client Status --- */
-
-typedef struct ParsecDecoder {
-    uint32_t index;
-    uint32_t width;
-    uint32_t height;
-    char name[DECODER_NAME_LEN];
-    bool h265;
-    bool color444;
-    uint8_t __pad[2];
-} ParsecDecoder;
+/* --- Client Status --- */
 
 typedef struct ParsecClientStatus {
-    ParsecGuest self;
-    ParsecDecoder decoder[NUM_VSTREAMS];
-    ParsecHostMode hostMode;
+    ParsecMetrics metrics;
+    char attemptID[ATTEMPT_ID_LEN];
     bool networkFailure;
-    uint8_t __pad[3];
+    bool decoderFallback;
+    uint8_t __pad[1];
 } ParsecClientStatus;
 
 /* --- Event structs --- */
@@ -283,12 +253,6 @@ typedef struct ParsecClientRumbleEvent {
     uint8_t __pad[2];
 } ParsecClientRumbleEvent;
 
-typedef struct ParsecClientStreamEvent {
-    ParsecStatus status;
-    uint8_t stream;
-    uint8_t __pad[3];
-} ParsecClientStreamEvent;
-
 typedef struct ParsecClientUserDataEvent {
     uint32_t id;
     uint32_t key;
@@ -299,7 +263,6 @@ typedef struct ParsecClientEvent {
     union {
         ParsecClientCursorEvent cursor;
         ParsecClientRumbleEvent rumble;
-        ParsecClientStreamEvent stream;
         ParsecClientUserDataEvent userData;
     };
 } ParsecClientEvent;
@@ -307,40 +270,40 @@ typedef struct ParsecClientEvent {
 
 /*** CALLBACKS ***/
 
-typedef void (*ParsecAudioFunc)(const int16_t *pcm, uint32_t frames, void *opaque);
-typedef void (*ParsecLogCallback)(ParsecLogLevel level, const char *msg, void *opaque);
+typedef void (*ParsecAudioCallback)(int16_t *pcm, uint32_t frames, void *opaque);
+typedef void (*ParsecLogCallback)(ParsecLogLevel level, char *msg, void *opaque);
 
 
 /*** SDK FUNCTIONS ***/
 
-ParsecStatus ParsecInit(uint32_t ver, const ParsecConfig *cfg, const void *reserved, Parsec **ps);
+ParsecStatus ParsecInit(uint32_t ver, ParsecConfig *cfg, void *reserved, Parsec **ps);
 void ParsecDestroy(Parsec *ps);
 
-void ParsecSetLogCallback(ParsecLogCallback callback, const void *opaque);
+void ParsecSetLogCallback(ParsecLogCallback callback, void *opaque);
+uint32_t ParsecVersion(void);
 
-ParsecStatus ParsecClientConnect(Parsec *ps, const ParsecClientConfig *cfg,
-                                  const char *sessionID, const char *peerID);
+void *ParsecGetBuffer(Parsec *ps, uint32_t key);
+void ParsecFree(void *ptr);
+
+ParsecStatus ParsecClientConnect(Parsec *ps, ParsecClientConfig *cfg,
+                                  char *sessionID, char *peerID);
 void ParsecClientDisconnect(Parsec *ps);
 ParsecStatus ParsecClientGetStatus(Parsec *ps, ParsecClientStatus *status);
 
-void ParsecClientSetDimensions(Parsec *ps, uint8_t stream,
-                                uint32_t width, uint32_t height, float scale);
+ParsecStatus ParsecClientSetDimensions(Parsec *ps, uint32_t width,
+                                        uint32_t height, float scale);
 
-ParsecStatus ParsecClientGLRenderFrame(Parsec *ps, uint8_t stream,
-                                        void *d3dDevice, void *d3dContext,
-                                        uint32_t timeout);
+ParsecStatus ParsecClientGLRenderFrame(Parsec *ps, uint32_t timeout);
+void ParsecClientGLDestroy(Parsec *ps);
 
-void ParsecClientPollAudio(Parsec *ps, ParsecAudioFunc audioFunc,
-                            uint32_t timeout, void *opaque);
+ParsecStatus ParsecClientPollAudio(Parsec *ps, ParsecAudioCallback callback,
+                                    uint32_t timeout, void *opaque);
 
 bool ParsecClientPollEvents(Parsec *ps, uint32_t timeout,
                              ParsecClientEvent *event);
 
 ParsecStatus ParsecClientSendMessage(Parsec *ps, ParsecMessage *msg);
-ParsecStatus ParsecClientSendUserData(Parsec *ps, uint32_t type, const char *data);
-
-void *ParsecGetBuffer(Parsec *ps, uint32_t key);
-void ParsecFree(void *ptr);
+ParsecStatus ParsecClientSendUserData(Parsec *ps, uint32_t id, char *text);
 
 #ifdef __cplusplus
 }
