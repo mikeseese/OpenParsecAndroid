@@ -177,12 +177,14 @@ void audio_destroy(struct audio **ctx_out)
     LOGD("Audio destroyed");
 }
 
-void audio_clear(struct audio **ctx_out)
+/**
+ * Internal clear: resets audio state on a single-pointer context.
+ * Used by audio_cb and audio_mute where only a single pointer is available.
+ */
+static void audio_clear_internal(struct audio *ctx)
 {
-    if (!ctx_out || !*ctx_out)
+    if (!ctx)
         return;
-
-    struct audio *ctx = *ctx_out;
 
     if (ctx->player) {
         (*ctx->player)->SetPlayState(ctx->player, SL_PLAYSTATE_STOPPED);
@@ -199,6 +201,14 @@ void audio_clear(struct audio **ctx_out)
     ctx->started = false;
     ctx->inUse = 0;
     ctx->failNum = 0;
+}
+
+void audio_clear(struct audio **ctx_out)
+{
+    if (!ctx_out || !*ctx_out)
+        return;
+
+    audio_clear_internal(*ctx_out);
 }
 
 /**
@@ -251,7 +261,7 @@ void audio_cb(const int16_t *pcm, uint32_t frames, void *opaque)
         /* All buffers full - drop this audio chunk */
         ctx->failNum++;
         if (ctx->failNum > 10) {
-            audio_clear(&ctx);
+            audio_clear_internal(ctx);
         }
         return;
     }
@@ -293,7 +303,7 @@ void audio_mute(bool muted, const void *opaque)
         if (ctx->player) {
             (*ctx->player)->SetPlayState(ctx->player, SL_PLAYSTATE_PAUSED);
         }
-        audio_clear(&ctx);
+        audio_clear_internal(ctx);
         LOGD("Audio muted");
     }
 }

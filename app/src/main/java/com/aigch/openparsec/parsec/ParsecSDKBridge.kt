@@ -283,8 +283,12 @@ class ParsecSDKBridge : ParsecService {
         Thread({
             Log.d(TAG, "Audio polling thread started")
             while (backgroundTaskRunning) {
-                if (nativeParsec != 0L && nativeAudio != 0L) {
-                    nativePollAudio(nativeParsec, nativeAudio, 16)
+                val parsec = nativeParsec
+                val audio = nativeAudio
+                if (parsec != 0L && audio != 0L) {
+                    nativePollAudio(parsec, audio, 16)
+                } else {
+                    break
                 }
             }
             Log.d(TAG, "Audio polling thread stopped")
@@ -294,8 +298,11 @@ class ParsecSDKBridge : ParsecService {
         Thread({
             Log.d(TAG, "Event polling thread started")
             while (backgroundTaskRunning) {
-                if (nativeParsec != 0L) {
-                    nativePollEvents(nativeParsec, 16)
+                val parsec = nativeParsec
+                if (parsec != 0L) {
+                    nativePollEvents(parsec, 16)
+                } else {
+                    break
                 }
             }
             Log.d(TAG, "Event polling thread stopped")

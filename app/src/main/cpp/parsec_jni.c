@@ -30,6 +30,10 @@
 static jmethodID handleCursorEventMethodId = NULL;
 static jmethodID handleUserDataEventMethodId = NULL;
 
+/* Cached field IDs for getStatusEx */
+static jfieldID hostWidthFieldId = NULL;
+static jfieldID hostHeightFieldId = NULL;
+
 /**
  * Parsec SDK log callback - forwards to Android logcat.
  */
@@ -67,8 +71,16 @@ Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativeInit(JNIEnv *env, jobject
     handleUserDataEventMethodId = (*env)->GetMethodID(env, cls,
         "handleUserDataEvent", "(I[B)V");
 
+    /* Cache field IDs for getStatusEx */
+    hostWidthFieldId = (*env)->GetFieldID(env, cls, "hostWidth", "F");
+    hostHeightFieldId = (*env)->GetFieldID(env, cls, "hostHeight", "F");
+
+    (*env)->DeleteLocalRef(env, cls);
+
     if (!handleCursorEventMethodId || !handleUserDataEventMethodId) {
         LOGE("Failed to find callback method IDs");
+        ParsecDestroy(parsec);
+        return 0;
     }
 
     LOGD("ParsecInit succeeded, handle=%p", parsec);
@@ -187,11 +199,10 @@ Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativeGetStatusEx(JNIEnv *env, 
     ParsecStatus result = ParsecClientGetStatus(p, &status);
 
     /* Update host dimensions from decoder info (matching iOS getStatusEx) */
-    jclass cls = (*env)->GetObjectClass(env, thiz);
-    jfieldID hostWidthField = (*env)->GetFieldID(env, cls, "hostWidth", "F");
-    jfieldID hostHeightField = (*env)->GetFieldID(env, cls, "hostHeight", "F");
-    (*env)->SetFloatField(env, thiz, hostWidthField, (jfloat)status.decoder[0].width);
-    (*env)->SetFloatField(env, thiz, hostHeightField, (jfloat)status.decoder[0].height);
+    if (hostWidthFieldId && hostHeightFieldId) {
+        (*env)->SetFloatField(env, thiz, hostWidthFieldId, (jfloat)status.decoder[0].width);
+        (*env)->SetFloatField(env, thiz, hostHeightFieldId, (jfloat)status.decoder[0].height);
+    }
 
     return (jint)result;
 }
