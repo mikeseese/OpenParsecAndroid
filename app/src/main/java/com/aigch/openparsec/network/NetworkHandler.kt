@@ -1,7 +1,5 @@
 package com.aigch.openparsec.network
 
-import com.aigch.openparsec.settings.SettingsHandler
-
 /**
  * Data models for Parsec API responses.
  * Ported from iOS NetworkHandler.swift
