@@ -106,7 +106,7 @@ static jfieldID hostHeightFieldId = NULL;
 /**
  * Parsec SDK log callback - forwards to Android logcat and in-memory buffer.
  */
-static void parsec_log_callback(ParsecLogLevel level, const char *msg, void *opaque)
+static void parsec_log_callback(ParsecLogLevel level, char *msg, void *opaque)
 {
     if (level == LOG_DEBUG) {
         LOG_BUF_D("Parsec", "%s", msg);
@@ -209,23 +209,19 @@ Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativeConnect(JNIEnv *env, jobj
     ParsecClientConfig cfg;
     memset(&cfg, 0, sizeof(cfg));
 
-    /* Configure both video streams (matching iOS dual-stream config) */
-    for (int i = 0; i < 2; i++) {
-        cfg.video[i].decoderIndex = 1;
-        cfg.video[i].resolutionX = resX;
-        cfg.video[i].resolutionY = resY;
-        cfg.video[i].decoderH265 = decoderH265;
-        cfg.video[i].decoderCompatibility = decoderCompat;
-    }
-
+    /* V1 SDK uses a flat client config */
+    cfg.decoderSoftware = 0;
     cfg.mediaContainer = 0;
     cfg.protocol = 1;
+    cfg.resolutionX = resX;
+    cfg.resolutionY = resY;
+    cfg.refreshRate = 0;
     cfg.pngCursor = false;
 
-    LOG_BUF_D(TAG, "Connecting to peer %s (res=%dx%d, h265=%d, compat=%d)",
-         pid, resX, resY, decoderH265, decoderCompat);
+    LOG_BUF_D(TAG, "Connecting to peer %s (res=%dx%d)",
+         pid, resX, resY);
 
-    ParsecStatus status = ParsecClientConnect(p, &cfg, sid, pid);
+    ParsecStatus status = ParsecClientConnect(p, &cfg, (char *)sid, (char *)pid);
 
     LOG_BUF_D(TAG, "ParsecClientConnect returned status=%d", (int)status);
 
@@ -272,11 +268,8 @@ Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativeGetStatusEx(JNIEnv *env, 
     memset(&status, 0, sizeof(status));
     ParsecStatus result = ParsecClientGetStatus(p, &status);
 
-    /* Update host dimensions from decoder info (matching iOS getStatusEx) */
-    if (hostWidthFieldId && hostHeightFieldId) {
-        (*env)->SetFloatField(env, thiz, hostWidthFieldId, (jfloat)status.decoder[0].width);
-        (*env)->SetFloatField(env, thiz, hostHeightFieldId, (jfloat)status.decoder[0].height);
-    }
+    /* V1 ParsecClientStatus does not contain decoder/host dimensions.
+       hostWidth and hostHeight remain at their default/user-set values. */
 
     return (jint)result;
 }
@@ -286,13 +279,12 @@ Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativeGetStatusEx(JNIEnv *env, 
 JNIEXPORT void JNICALL
 Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativeSetDimensions(JNIEnv *env, jobject thiz,
                                                                       jlong parsec,
-                                                                      jint stream,
                                                                       jint width, jint height,
                                                                       jfloat scale)
 {
     Parsec *p = (Parsec *)(intptr_t)parsec;
     if (p) {
-        ParsecClientSetDimensions(p, (uint8_t)stream, (uint32_t)width,
+        ParsecClientSetDimensions(p, (uint32_t)width,
                                    (uint32_t)height, scale);
     }
 }
@@ -300,12 +292,11 @@ Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativeSetDimensions(JNIEnv *env
 JNIEXPORT void JNICALL
 Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativeRenderGLFrame(JNIEnv *env, jobject thiz,
                                                                       jlong parsec,
-                                                                      jint stream,
                                                                       jint timeout)
 {
     Parsec *p = (Parsec *)(intptr_t)parsec;
     if (p) {
-        ParsecClientGLRenderFrame(p, (uint8_t)stream, NULL, NULL, (uint32_t)timeout);
+        ParsecClientGLRenderFrame(p, (uint32_t)timeout);
     }
 }
 
@@ -546,7 +537,7 @@ Java_com_aigch_openparsec_parsec_ParsecSDKBridge_nativePollEvents(JNIEnv *env, j
         }
 
         (*env)->CallVoidMethod(env, thiz, handleCursorEventMethodId,
-            (jboolean)event.cursor.cursor.hidden,
+            (jboolean)event.cursor.cursor.modeUpdate,
             (jboolean)event.cursor.cursor.relative,
             (jboolean)event.cursor.cursor.imageUpdate,
             (jint)event.cursor.cursor.width,

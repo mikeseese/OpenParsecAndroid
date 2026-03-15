@@ -93,8 +93,8 @@ class ParsecSDKBridge : ParsecService {
     private external fun nativeDisconnect(parsec: Long, audio: Long)
     private external fun nativeGetStatus(parsec: Long): Int
     private external fun nativeGetStatusEx(parsec: Long): Int
-    private external fun nativeSetDimensions(parsec: Long, stream: Int, width: Int, height: Int, scale: Float)
-    private external fun nativeRenderGLFrame(parsec: Long, stream: Int, timeout: Int)
+    private external fun nativeSetDimensions(parsec: Long, width: Int, height: Int, scale: Float)
+    private external fun nativeRenderGLFrame(parsec: Long, timeout: Int)
     private external fun nativeSetConfig(
         parsec: Long, decoderH265: Boolean, decoderCompat: Boolean,
         mediaContainer: Int, protocol: Int, pngCursor: Boolean
@@ -199,13 +199,13 @@ class ParsecSDKBridge : ParsecService {
         mouseInfo.mouseX = (width / 2).toInt()
         mouseInfo.mouseY = (height / 2).toInt()
         if (nativeParsec != 0L) {
-            nativeSetDimensions(nativeParsec, DEFAULT_STREAM, width.toInt(), height.toInt(), scale)
+            nativeSetDimensions(nativeParsec, width.toInt(), height.toInt(), scale)
         }
     }
 
     override fun renderGLFrame(timeout: Int) {
         if (nativeParsec != 0L) {
-            nativeRenderGLFrame(nativeParsec, DEFAULT_STREAM, timeout)
+            nativeRenderGLFrame(nativeParsec, timeout)
         }
     }
 
@@ -493,5 +493,4 @@ class ParsecSDKBridge : ParsecService {
     }
 }
 
-private const val DEFAULT_STREAM = 0
 private const val GET_ADAPTER_INFO_ID = 12

@@ -242,7 +242,7 @@ static void buffer_queue_callback(SLAndroidSimpleBufferQueueItf bq, void *contex
  * Audio data callback from Parsec SDK.
  * Called by ParsecClientPollAudio with decoded PCM audio frames.
  */
-void audio_cb(const int16_t *pcm, uint32_t frames, void *opaque)
+void audio_cb(int16_t *pcm, uint32_t frames, void *opaque)
 {
     if (frames == 0 || opaque == NULL)
         return;
